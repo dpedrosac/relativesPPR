@@ -76,10 +76,11 @@ zbi_imp <- impute_scale(
   get_when()
 
 # 3) WHO-5 vorbereiten + Imputation
+# TODO: minor mistake here, changed 0 = "nie" to 0 = "zu keinem Zeitpunkt"
 who5_items <- names(who5_raw)[stringr::str_detect(names(who5_raw), "^id[1-5]_")]
 who5_map <- c(
   "die ganze zeit"=5,"meistens"=4,"etwas mehr als die hälfte der zeit"=3,
-  "etwas weniger als die hälfte der zeit"=2,"ab und zu"=1,"nie"=0
+  "etwas weniger als die hälfte der zeit"=2,"ab und zu"=1,"zu keinem zeitpunkt"=0
 )
 who5_num <- who5_raw |>
   dplyr::mutate(dplyr::across(dplyr::all_of(who5_items), ~{
@@ -105,13 +106,27 @@ who5_scored <- who5_imp |>
 
 # 4) BDI-II vorbereiten + Imputation
 # (Spalten heißen id1_1_..., id2_2_..., ..., id21_21_...)
-bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_\\d+")]
-if (length(bdi_items) < 10) stop("BDI-Itemspalten scheinen unvollständig.")
+# bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_\\d+")]
+# if (length(bdi_items) < 10) stop("BDI-Itemspalten scheinen unvollständig.")
 
-bdi_num <- bdi_raw |>
-  dplyr::mutate(dplyr::across(dplyr::all_of(bdi_items), ~{
-    suppressWarnings(readr::parse_number(as.character(.x)))
-  }))
+#bdi_num <- bdi_raw |>
+#  dplyr::mutate(dplyr::across(dplyr::all_of(bdi_items), ~{
+#    suppressWarnings(readr::parse_number(as.character(.x)))
+#  }))
+
+# bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_")] # TODO: this was a mistake, so that "anmerkungen" was included and falsely converted to numbers
+bdi_items <- names(bdi_raw)[
+  stringr::str_detect(names(bdi_raw), "^id\\d{1,2}_\\d+") &
+    !stringr::str_detect(names(bdi_raw), "^id25_")]
+    k_bdi <- length(bdi_items)
+
+bdi_num <- bdi_raw %>%
+  dplyr::mutate(
+     dplyr::across(
+      dplyr::all_of(bdi_items),
+       ~ suppressWarnings(readr::parse_number(as.character(.x)))
+       ))
+
 
 k_bdi <- length(bdi_items)
 bdi_imp <- impute_scale(
