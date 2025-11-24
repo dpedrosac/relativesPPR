@@ -49,6 +49,6 @@ po/*~
 rsconnect/
 
 # Old versions and data folders
-deprecated/
-Data/
-Output/
+/deprecated/
+/Data/
+/Output/
