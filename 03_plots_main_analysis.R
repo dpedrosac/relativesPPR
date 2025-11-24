@@ -1,6 +1,6 @@
 # This is code to analyse the ParkProReakt results (project from 2022 -2025)
 # Specifically, results for how the burden of relatives changes during intervention
-# Code developed by Lizz Wappler and  David Pedrosa
+# Code developed by Liz Wappler and  David Pedrosa
 
 # version 1.2 # 2025-24-11 # Next version with some changes in structure and some double-checks
 
