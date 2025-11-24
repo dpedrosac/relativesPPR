@@ -148,6 +148,8 @@ bdi_scored <- bdi_imp |>
   dplyr::ungroup() |>
   get_when()
 
+# TODO: Don'r really understand the selection here! Where is this from?
+
 # 5) CRF / Fatigue vorbereiten + Imputation
 crf_item_names <- c(
   "id48_1_sie_haben_aufgrund_ihrer_pflegeaufgaben_ein_gefuehl_von_muede_sein",
@@ -205,10 +207,11 @@ make_long_with_group <- function(df_scored, score_var, instrument_label) {
   df_long
 }
 
+#TODO: why not always imputed? Changed for the time being
 zbi_long  <- make_long_with_group(zbi_imp,   zbi_total_use, "ZBI")
-who5_long <- make_long_with_group(who5_scored, who5_pct,    "WHO-5 (0–100 %)")
-bdi_long  <- make_long_with_group(bdi_scored,  bdi2_total,  "BDI-II (0–63)")
-crf_long  <- make_long_with_group(crf_scored,  crf_total,   "CRF")
+who5_long <- make_long_with_group(who5_imp, who5_pct,    "WHO-5 (0–100 %)") # formerly who5_scored
+bdi_long  <- make_long_with_group(bdi_imp,  bdi2_total,  "BDI-II (0–63)") # formerly bdi_scored
+crf_long  <- make_long_with_group(crf_imp,  crf_total,   "CRF") # formerly cfi_scored
 
 long_list <- list(
   "WHO-5 (0–100 %)" = who5_long,
@@ -217,6 +220,26 @@ long_list <- list(
   "CRF"             = crf_long
 )
 long_list <- long_list[!vapply(long_list, is.null, logical(1))]
+
+if sanity_check==TRUE{
+
+summarise_score <- function(df) {
+  df %>%
+    group_by(group, time) %>%
+    summarise(
+      n    = sum(!is.na(score)),
+      mean = mean(score, na.rm = TRUE),
+      sd   = sd(score, na.rm = TRUE),
+      sem  = sd / sqrt(n),
+      .groups = "drop"
+    )
+}
+
+result_list <- map(long_list, summarise_score)
+
+
+}
+
 
 # 7) ANOVA pro Skala (group × time)
 run_anova_summary <- function(dlong, instrument_label) {
