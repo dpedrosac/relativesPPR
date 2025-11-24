@@ -1,23 +1,27 @@
-# 03_plots_main_analysis.R
-# - Long-Daten (pre/post je Skala) vorbereiten
-# - Mittelwerte ± SE nach Gruppe plotten
-# - Abbildung für Manuskript speichern
+# This is code to analyse the ParkProReakt results (project from 2022 -2025)
+# Specifically, results for how the burden of relatives changes during intervention
+# Code developed by Lizz Wappler and  David Pedrosa
 
+# version 1.2 # 2025-24-11 # Next version with some changes in structure and some double-checks
 
-# Pakete & Hilfsfunktionen laden
+# Description:
+# prepare data in "long format" (pre-/post data per subject)
+# mixed-effects ANOVA (group x time)
+# identify stringest individual differences for manual double check
 
+############################################################################################
+# 03_plots_main_analysis.R:
+############################################################################################
+
+# packages and helper functions
 source("00_setup.R")
-
-
-
-need_extra <- c("afex", "ggplot2", "purrr")
+need_extra <- c("afex", "ggplot2", "purrr") # TODO: Would put that into [00_setup.R]
 missing_extra <- setdiff(need_extra, rownames(installed.packages()))
 if (length(missing_extra)) install.packages(missing_extra, dependencies = TRUE)
 invisible(lapply(need_extra, library, character.only = TRUE))
 afex::afex_options(type = 3)
 
-# 1) Daten einlesen (aktuelle Exporte vom 13.10.2025)
-
+# 1) Read data (TODO: not necessary as identical to [00_setup.R])
 data_dir <- "Data/exports_demapped_251013"
 read_latest <- function(filename) {
   readr::read_csv(file.path(data_dir, filename), show_col_types = FALSE) |>
@@ -108,13 +112,14 @@ zbi_imp <- impute_scale(
 
 who5_items <- names(who5_raw)[stringr::str_detect(names(who5_raw), "^id[1-5]_")]
 
+# TODO: minor mistake here, changed 0 = "nie" to 0 = "zu keinem Zeitpunkt"
 who5_map <- c(
   "die ganze zeit" = 5,
   "meistens" = 4,
   "etwas mehr als die hälfte der zeit" = 3,
   "etwas weniger als die hälfte der zeit" = 2,
   "ab und zu" = 1,
-  "nie" = 0
+  "zu keinem zeitpunkt" = 0
   )
 
 who5_num <- who5_raw %>%
@@ -148,9 +153,11 @@ who5_scored <- who5_imp %>%
 
 #    -> BDI-II
 
-bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_")]
-
-k_bdi <- length(bdi_items)
+# bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_")] # TODO: this was a mistake, so that "anmerkungen" was included and falsely converted to numbers
+bdi_items <- names(bdi_raw)[
+  stringr::str_detect(names(bdi_raw), "^id\\d{1,2}_\\d+") &
+    !stringr::str_detect(names(bdi_raw), "^id25_")]
+    k_bdi <- length(bdi_items)
 
 bdi_num <- bdi_raw %>%
   dplyr::mutate(
@@ -167,6 +174,7 @@ bdi_imp <- impute_scale(
   )
 
 bdi_scored <- bdi_imp %>%
+  select(-starts_with("id25")) %>%
   dplyr::rowwise() %>%
   dplyr::mutate(
     n_ans = sum(!is.na(dplyr::c_across(dplyr::all_of(bdi_items)))),

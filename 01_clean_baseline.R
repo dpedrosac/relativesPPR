@@ -44,7 +44,6 @@ zbi_raw$patient_id <- standardize_id(zbi_raw$patient_id)
 crf_raw$patient_id <- standardize_id(crf_raw$patient_id)
 df_pat$patient_id  <- standardize_id(df_pat$patient_id)
 
-
 # 3) CRF: Alter / Geschlecht / Familienstand (robust)
 
 # 3a) Alter-Spalte per Heuristik wählen (keine "questionnaire"-Felder o.ä.)

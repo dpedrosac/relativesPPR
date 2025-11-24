@@ -1,19 +1,29 @@
-# 02_longitudinal_anova.R
-# - Skalen vorbereiten (ZBI, WHO-5, BDI-II, CRF/Fatigue)
-# - Imputation
-# - pre/post pro Patient
-# - Mixed ANOVA (group × time)
-# - Größte individuelle Veränderungen identifizieren
+# This is code to analyse the ParkProReakt results (project from 2022 -2025)
+# Specifically, results for how the burden of relatives changes during intervention
+# Code developed by Lizz Wappler and  David Pedrosa
 
-# Pakete & Helfer
+# version 1.2 # 2025-24-11 # Second version with some changes in structure and some double-checks
+
+# Description:
+# prepare scales (ZBI, WHO-5, BDI-II, CRF/Fatigue)
+# run imputation
+# pre-/post-scores per subject 
+# mixed-effects ANOVA (group x time)
+# identify stringest individual differences for manual double check
+
+############################################################################################
+# 02_longitudinal_anova.R:
+############################################################################################
+
+# packages and helper functions
 source("00_setup.R")
-need_extra <- c("afex", "ggplot2", "purrr")
+need_extra <- c("afex", "ggplot2", "purrr") # TODO: Would put that into [00_setup.R]
 missing_extra <- setdiff(need_extra, rownames(installed.packages()))
 if (length(missing_extra)) install.packages(missing_extra, dependencies = TRUE)
 invisible(lapply(need_extra, library, character.only = TRUE))
 afex::afex_options(type = 3)
 
-# 1) Daten einlesen
+# 1) Read data (TODO: not necessary as identical to [00_setup.R])
 data_dir <- "Data/exports_demapped_251013"
 read_latest <- function(filename) {
   readr::read_csv(file.path(data_dir, filename), show_col_types = FALSE) |>
@@ -306,3 +316,6 @@ if (exists("crf_wide")) utils::write.csv(crf_wide, "Output/crf_changes.csv", row
 
 message("Dateien gespeichert: Output/anova_ergebnisse.html, zbi_changes.csv",
         if (exists("crf_wide")) ", crf_changes.csv" else "")
+        
+# TODO: One should check for normality beforehand - or use linerar models instead of ANOVA, since 
+# they should be more rubust to outliers, normality deviations, etc. 
