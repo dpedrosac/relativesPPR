@@ -1,9 +1,22 @@
-# 01_clean_baseline.R — Baseline (ohne Imputation)
+# This is code to analyse the ParkProReakt results (project from 2022 -2025)
+# Specifically, results for how the burden of relatives changes during intervention
+# Code developed by Lizz Wappler and  David Pedrosa
+
+# version 1.3 # 2025-24-11 # Second version with some changes in structure and some double-checks
+
+# Description:
+# does not impute data
+# Table1 based only on real, non-imputed data
+# impuitation occurs later in [02_longitudinal_anova.R]
+
+############################################################################################
+# 01_clean_baseline.R:
+############################################################################################
 
 # 0) Setup/Helfer laden
-source("00_setup.R")
+source("00_setup.R") # adds necessary helper functions and loads packages
 
-# 1) Daten einlesen
+# 1) Read data
 
 zbi_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_16_demapped.csv")
 df_pat  <- read_latest("export_patients_5_2025-10-13-09-52_demapped.csv") |>
@@ -13,12 +26,10 @@ df_pat  <- read_latest("export_patients_5_2025-10-13-09-52_demapped.csv") |>
   ) |>
   dplyr::select(patient_id, group)
 
-# CRF (Demografie)
+# CRF (Demographics for relatives)
 crf_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_27_demapped.csv")
 
-
-# 2) IDs vereinheitlichen
-
+# 2) Make IDs uniform
 idcol_zbi <- detect_patient_id_col(zbi_raw)
 if (idcol_zbi != "patient_id") {
   zbi_raw <- zbi_raw |> dplyr::rename(patient_id = !!rlang::sym(idcol_zbi))
@@ -115,9 +126,7 @@ crf_clean <- crf_raw |>
   dplyr::select(patient_id, alter, geschlecht, familienstand) |>
   dplyr::distinct()
 
-
 # 4) ZBI: Items & Mapping robust
-
 zbi_items <- names(zbi_raw)[stringr::str_detect(names(zbi_raw), "^id\\d+_\\d+")]
 if (length(zbi_items) == 0) zbi_items <- names(zbi_raw)[stringr::str_detect(names(zbi_raw), "^id\\d+")]
 if (length(zbi_items) == 0) stop("Keine ZBI-Itemspalten gefunden.")
@@ -139,8 +148,7 @@ parse_likert <- function(x) {
 }
 zbi_num <- zbi_raw |> dplyr::mutate(dplyr::across(dplyr::all_of(zbi_items), parse_likert))
 
-# 5) ZBI-Score (ohne Imputation; ≤4 fehlende Items)
-
+# 5) ZBI-Score (no imputation; ≤4 fehlende Items)
 zbi_scored <- zbi_num |>
   dplyr::rowwise() |>
   dplyr::mutate(
@@ -161,7 +169,6 @@ zbi_scored <- zbi_num |>
 
 
 # 5a) BDI einlesen & scorieren (BDI-II, 21 Items, 0-3)
-
 bdi_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_15_demapped.csv")
 
 # patient_id erkennen & vereinheitlichen
