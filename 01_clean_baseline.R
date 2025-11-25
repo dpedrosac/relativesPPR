@@ -1,32 +1,28 @@
-# This is code to analyse the ParkProReakt results (project from 2022 -2025)
-# Specifically, results for how the burden of relatives changes during intervention
-# Code developed by Lizz Wappler and  David Pedrosa
-
-# version 1.3 # 2025-24-11 # Second version with some changes in structure and some double-checks
-
+#!/usr/bin/env Rscript
+# Script: 01_clean_baseline.R
+# Purpose: Clean baseline data (without imputation)
+# Version: 1.3
+# Date: 2025-11-24
 # Description:
-# does not impute data
-# Table1 based only on real, non-imputed data
-# impuitation occurs later in [02_longitudinal_anova.R]
-
+# - No imputation here
+# - Table 1 is based only on real, non-imputed data
+# - Imputation occurs later in 02_longitudinal_anova.R
 ############################################################################################
-# 01_clean_baseline.R:
+# Load setup / helpers
 ############################################################################################
 
-# 0) Setup/Helfer laden
-source("00_setup.R") # adds necessary helper functions and loads packages
+source("00_setup.R") # loads helper functions and packages
 
 # 1) Read data
-
 zbi_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_16_demapped.csv")
 df_pat  <- read_latest("export_patients_5_2025-10-13-09-52_demapped.csv") |>
   dplyr::mutate(
     group = dplyr::if_else(active, "Intervention", "Control", missing = "Control"),
-    group = factor(group, levels = c("Control","Intervention"))
+    group = factor(group, levels = c("Control", "Intervention"))
   ) |>
   dplyr::select(patient_id, group)
 
-# CRF (Demographics for relatives)
+# CRF (demographics for relatives)
 crf_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_27_demapped.csv")
 
 # 2) Make IDs uniform
@@ -44,20 +40,19 @@ zbi_raw$patient_id <- standardize_id(zbi_raw$patient_id)
 crf_raw$patient_id <- standardize_id(crf_raw$patient_id)
 df_pat$patient_id  <- standardize_id(df_pat$patient_id)
 
-# 3) CRF: Alter / Geschlecht / Familienstand (robust)
-
-# 3a) Alter-Spalte per Heuristik wählen (keine "questionnaire"-Felder o.ä.)
+# 3) CRF: age / sex / marital status (robust)
+# 3a) Choose age column by heuristic (avoid 'questionnaire' fields)
 age_candidates <- grep("(alter|geburtsjahr|geburtsdatum|age|birth)", names(crf_raw),
                        ignore.case = TRUE, value = TRUE)
 
 pick_age <- function(df, cands) {
   if (!length(cands)) return(NA_character_)
-  # auf numerisch prüfbare Kandidaten einschränken
+  # restrict to candidates that can be numeric
   cands_num <- cands[vapply(df[cands], function(x) {
     is.numeric(x) || is.integer(x) || all(suppressWarnings(!is.na(as.numeric(x))))
   }, logical(1))]
   if (!length(cands_num)) return(NA_character_)
-  # plausibler Median (10..110) & Varianz > 0.5
+  # plausible median (10..110) & variance > 0.5
   score <- sapply(cands_num, function(nm) {
     x <- suppressWarnings(as.numeric(df[[nm]]))
     x <- x[is.finite(x)]
@@ -73,11 +68,11 @@ pick_age <- function(df, cands) {
 age_col2 <- pick_age(crf_raw, age_candidates)
 crf_raw$alter <- if (is.na(age_col2)) NA_real_ else suppressWarnings(as.numeric(crf_raw[[age_col2]]))
 
-# 3b) Geschlecht erkennen 
-sex_candidates <- c("id2_2_ihr_geschlecht","geschlecht","sex","gender","biologisches_geschlecht","sexus")
+# 3b) Detect sex column
+sex_candidates <- c("id2_2_ihr_geschlecht", "geschlecht", "sex", "gender", "biologisches_geschlecht", "sexus")
 sex_col <- intersect(sex_candidates, names(crf_raw))[1]
 if (is.na(sex_col) || is.null(sex_col)) {
-  # heuristisch nach Tokens suchen
+  # heuristic: search token matches in character columns
   chr_cols <- names(crf_raw)[vapply(crf_raw, function(x) is.character(x) || is.factor(x), logical(1))]
   hit <- NA_character_
   for (nm in chr_cols) {
@@ -89,22 +84,22 @@ if (is.na(sex_col) || is.null(sex_col)) {
   sex_col <- hit
 }
 if (is.na(sex_col) || is.null(sex_col)) {
-  crf_raw$geschlecht <- factor(NA_character_, levels = c("weiblich","männlich","divers"))
+  crf_raw$geschlecht <- factor(NA_character_, levels = c("weiblich", "männlich", "divers"))
 } else {
   sx <- tolower(trimws(as.character(crf_raw[[sex_col]])))
   sx <- dplyr::case_when(
-    sx %in% c("w","f","weiblich","female","frau") ~ "weiblich",
-    sx %in% c("m","male","männlich","maennlich","mann") ~ "männlich",
-    sx %in% c("divers","d","non-binary","non binary","nb") ~ "divers",
+    sx %in% c("w", "f", "weiblich", "female", "frau") ~ "weiblich",
+    sx %in% c("m", "male", "männlich", "maennlich", "mann") ~ "männlich",
+    sx %in% c("divers", "d", "non-binary", "non binary", "nb") ~ "divers",
     TRUE ~ NA_character_
   )
-  crf_raw$geschlecht <- factor(sx, levels = c("weiblich","männlich","divers"))
+  crf_raw$geschlecht <- factor(sx, levels = c("weiblich", "männlich", "divers"))
 }
 
-# 3c) Familienstand 
-fs_candidates <- c("id3_3_ihr_familienstand","familienstand","family_status","marital_status")
+# 3c) Marital status
+fs_candidates <- c("id3_3_ihr_familienstand", "familienstand", "family_status", "marital_status")
 fs_col <- intersect(fs_candidates, names(crf_raw))[1]
-default_fs_levels <- c("Ledig","Verheiratet","Geschieden","Verwitwet","Sonstiges")
+default_fs_levels <- c("Ledig", "Verheiratet", "Geschieden", "Verwitwet", "Sonstiges")
 
 if (is.na(fs_col) || is.null(fs_col)) {
   crf_raw$familienstand <- factor(NA_character_, levels = default_fs_levels)
@@ -120,34 +115,34 @@ if (is.na(fs_col) || is.null(fs_col)) {
   crf_raw$familienstand <- factor(fs, levels = default_fs_levels)
 }
 
-# 3d) CRF-Subset
+# 3d) CRF subset
 crf_clean <- crf_raw |>
   dplyr::select(patient_id, alter, geschlecht, familienstand) |>
   dplyr::distinct()
 
-# 4) ZBI: Items & Mapping robust
+# 4) ZBI: items & mapping (robust)
 zbi_items <- names(zbi_raw)[stringr::str_detect(names(zbi_raw), "^id\\d+_\\d+")]
 if (length(zbi_items) == 0) zbi_items <- names(zbi_raw)[stringr::str_detect(names(zbi_raw), "^id\\d+")]
 if (length(zbi_items) == 0) stop("Keine ZBI-Itemspalten gefunden.")
 
 map_levels <- c(
-  "nie"=0,"selten"=1,"manchmal"=2,"häufig"=3,"haeufig"=3,"oft"=3,"ziemlich oft"=3,
-  "sehr oft"=4,"fast immer"=4,"immer"=4,
-  # Zusatz-Varianten
-  "trifft nicht zu"=0,"nie/überhaupt nicht"=0,
-  "gelegentlich"=2,"hin und wieder"=2,
-  "häufig/oft"=3,"ziemlich häufig"=3,
-  "sehr häufig"=4,"meistens"=4
+  "nie" = 0, "selten" = 1, "manchmal" = 2, "häufig" = 3, "haeufig" = 3, "oft" = 3, "ziemlich oft" = 3,
+  "sehr oft" = 4, "fast immer" = 4, "immer" = 4,
+  # variants
+  "trifft nicht zu" = 0, "nie/überhaupt nicht" = 0,
+  "gelegentlich" = 2, "hin und wieder" = 2,
+  "häufig/oft" = 3, "ziemlich häufig" = 3,
+  "sehr häufig" = 4, "meistens" = 4
 )
 parse_likert <- function(x) {
   v <- tolower(trimws(as.character(x)))
-  num <- suppressWarnings(readr::parse_number(v))  # z.B. "3 - häufig"
+  num <- suppressWarnings(readr::parse_number(v))  # e.g., "3 - häufig"
   out <- ifelse(!is.na(num), num, unname(map_levels[v]))
   suppressWarnings(as.numeric(out))
 }
 zbi_num <- zbi_raw |> dplyr::mutate(dplyr::across(dplyr::all_of(zbi_items), parse_likert))
 
-# 5) ZBI-Score (no imputation; ≤4 fehlende Items)
+# 5) ZBI score (no imputation; ≤4 missing items)
 zbi_scored <- zbi_num |>
   dplyr::rowwise() |>
   dplyr::mutate(
@@ -159,42 +154,41 @@ zbi_scored <- zbi_num |>
     ),
     zbi_kat_raw = cut(
       zbi_total_raw,
-      breaks = c(-Inf,20,40,60,Inf),
-      labels = c("keine/geringe","leicht","moderat","schwer"),
+      breaks = c(-Inf, 20, 40, 60, Inf),
+      labels = c("keine/geringe", "leicht", "moderat", "schwer"),
       right = TRUE
     )
   ) |>
   dplyr::ungroup()
 
-
-# 5a) BDI einlesen & scorieren (BDI-II, 21 Items, 0-3)
+# 5a) Read & score BDI (BDI-II, 21 items, 0-3)
 bdi_raw <- read_latest("cleaned_export_qform_5_2025-10-13-09-54_15_demapped.csv")
 
-# patient_id erkennen & vereinheitlichen
+# detect & standardize patient_id
 idcol_bdi <- detect_patient_id_col(bdi_raw)
 if (idcol_bdi != "patient_id") {
   bdi_raw <- bdi_raw |> dplyr::rename(patient_id = !!rlang::sym(idcol_bdi))
 }
 bdi_raw$patient_id <- trimws(as.character(bdi_raw$patient_id))
 
-# Item-Spalten (id<Zahl> oder id<Zahl>_<Zahl>)
+# item columns (id<number> or id<number>_<number>)
 bdi_items <- names(bdi_raw)[stringr::str_detect(names(bdi_raw), "^id\\d+_\\d+")]
 if (length(bdi_items) == 0) {
   stop("Keine BDI-Itemspalten gefunden (Datei 15).")
 }
 
-# Text→Zahl Mapping (robust)
+# text→number mapping (robust)
 bdi_map <- c(
-  "0"=0,"1"=1,"2"=2,"3"=3,
-  "gar nicht"=0,"überhaupt nicht"=0,"ueberhaupt nicht"=0,"trifft nicht zu"=0,"nie"=0,
-  "leicht"=1,"ein wenig"=1,"ein bisschen"=1,"manchmal"=1,
-  "mäßig"=2,"maessig"=2,"ziemlich"=2,"oft"=2,
-  "stark"=3,"sehr stark"=3,"fast immer"=3,"immer"=3
+  "0" = 0, "1" = 1, "2" = 2, "3" = 3,
+  "gar nicht" = 0, "überhaupt nicht" = 0, "ueberhaupt nicht" = 0, "trifft nicht zu" = 0, "nie" = 0,
+  "leicht" = 1, "ein wenig" = 1, "ein bisschen" = 1, "manchmal" = 1,
+  "mäßig" = 2, "maessig" = 2, "ziemlich" = 2, "oft" = 2,
+  "stark" = 3, "sehr stark" = 3, "fast immer" = 3, "immer" = 3
 )
 
 parse_bdi <- function(x) {
   v <- tolower(trimws(as.character(x)))
-  num <- suppressWarnings(readr::parse_number(v)) # fängt "2 - mäßig" etc. ab
+  num <- suppressWarnings(readr::parse_number(v)) # catches "2 - mäßig" etc.
   out <- ifelse(!is.na(num), num, unname(bdi_map[v]))
   suppressWarnings(as.numeric(out))
 }
@@ -204,8 +198,8 @@ bdi_num <- bdi_raw |>
     dplyr::across(dplyr::all_of(bdi_items), parse_bdi)
   )
 
-# BDI-Score (ohne Imputation). Regel: max 2 fehlende Items, sonst NA.
-# (Wenn <=2 fehlen, summieren nur die vorhandenen – konservativ ohne Imputation.)
+# BDI score (no imputation). Rule: max 2 missing items, otherwise NA.
+# If ≤2 are missing, sum available items (conservative, no imputation).
 bdi_scored <- bdi_num |>
   dplyr::rowwise() |>
   dplyr::mutate(
@@ -226,13 +220,12 @@ bdi_scored <- bdi_num |>
   dplyr::ungroup() |>
   dplyr::select(patient_id, bdi_total_raw, bdi_kat_raw)
 
-# 6) Merge & Baseline bestimmen
-
+# 6) Merge & determine baseline
 dat <- zbi_scored |>
-  dplyr::left_join(bdi_scored, by = "patient_id") |>   #  <<< NEU: BDI dazu
+  dplyr::left_join(bdi_scored, by = "patient_id") |>   # add BDI
   dplyr::left_join(crf_clean, by = "patient_id") |>
   dplyr::left_join(df_pat,  by = "patient_id") |>
-  dplyr::mutate(group = factor(group, levels = c("Control","Intervention")))
+  dplyr::mutate(group = factor(group, levels = c("Control", "Intervention")))
 
 dat_baseline <- dat |>
   get_when() |>
@@ -240,19 +233,17 @@ dat_baseline <- dat |>
   dplyr::group_by(patient_id) |>
   dplyr::slice_head(n = 1) |>
   dplyr::ungroup() |>
-  # Sicherheits-Cast: Kategorien als Faktor halten (auch bei all-NA)
+  # safety cast: keep categories as factors (also when all-NA)
   dplyr::mutate(
-    geschlecht    = if (!is.factor(geschlecht)) factor(geschlecht, levels = c("weiblich","männlich","divers")) else geschlecht,
+    geschlecht    = if (!is.factor(geschlecht)) factor(geschlecht, levels = c("weiblich", "männlich", "divers")) else geschlecht,
     familienstand = if (!is.factor(familienstand)) factor(familienstand, levels = default_fs_levels) else familienstand
   )
 
-
-# 7) Tabelle 1 (gtsummary)
-
+# 7) Table 1 (gtsummary)
 tbl1_baseline <- dat_baseline |>
   dplyr::select(
     zbi_total_raw, zbi_kat_raw,
-    bdi_total_raw, bdi_kat_raw,          #  <<< NEU
+    bdi_total_raw, bdi_kat_raw,
     alter, geschlecht, familienstand,
     group
   ) |>
@@ -272,8 +263,8 @@ tbl1_baseline <- dat_baseline |>
     label = list(
       zbi_total_raw ~ "ZBI-Gesamtscore (roh)",
       zbi_kat_raw   ~ "ZBI-Kategorie (roh)",
-      bdi_total_raw ~ "BDI-Gesamtscore (roh)",        #  <<< NEU
-      bdi_kat_raw   ~ "BDI-Kategorie (roh)",          #  <<< NEU
+      bdi_total_raw ~ "BDI-Gesamtscore (roh)",
+      bdi_kat_raw   ~ "BDI-Kategorie (roh)",
       alter         ~ "Alter (Jahre)",
       geschlecht    ~ "Geschlecht",
       familienstand ~ "Familienstand"
@@ -283,12 +274,10 @@ tbl1_baseline <- dat_baseline |>
   gtsummary::bold_labels() |>
   gtsummary::modify_caption("**Tabelle 1 (Baseline, ohne Imputation).** Mittelwert ± SD; n (%).")
 
-# Optional: p-Werte
+# Optional: p-values
 # tbl1_baseline <- tbl1_baseline |> gtsummary::add_p(test = everything() ~ "wilcox.test")
 
-
-# 8) Anzeigen & robust speichern
-
+# 8) Display & save robustly
 gt_tbl <- gtsummary::as_gt(tbl1_baseline)
 print(gt_tbl)
 
