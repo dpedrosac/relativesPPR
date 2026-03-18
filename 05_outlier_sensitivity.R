@@ -1,70 +1,117 @@
 #!/usr/bin/env Rscript
-# Script: 05_outlier_sensitivity.R
-# Purpose: sensitivity analysis and clinical outlier review
-# Inputs: zbi_long (from longitudinal analysis)
-# Outputs: Output/zbi_top_changes_for_clinical_review.csv,
-#          Output/anova_sensitivity_summary_brief.csv
-# Version: 1.0
-# Date: 2025-11-24
+# =========================================================
+# 05_outlier_sensitivity.R
+# ---------------------------------------------------------
+# Purpose:
+#   Run a sensitivity analysis and clinical outlier review
+#   for ZBI change scores.
+#
+# Provides:
+#   - Selection of patients with complete pre/post ZBI data
+#   - Wide-format change-score table
+#   - Export of cases for clinical review
+#   - Repeated-measures ANOVA with and without the largest
+#     changes
+#   - Brief CSV summary of sensitivity results
+#
+# Input:
+#   - zbi_long (created in 02_longitudinal_anova.R)
+#
+# Output:
+#   - Output/zbi_top_changes_for_clinical_review.csv
+#   - Output/anova_sensitivity_summary_brief.csv
+#
+# Dependencies:
+#   00_setup.R
+#   zbi_long must already exist in the environment
+# =========================================================
 
-library(dplyr)
-library(tidyr)
-library(readr)
-library(afex)
 
-# 1) Ensure ZBI data exists
-if (!exists("zbi_long")) stop("zbi_long fehlt – vorher 02_longitudinal_anova.R ausführen.")
+# =========================================================
+# 1) Ensure ZBI data are available
+# =========================================================
 
-# 2) Keep only participants with pre AND post
+if (!exists("zbi_long")) {
+  stop("zbi_long is missing — run 02_longitudinal_anova.R first.")
+}
+
+
+# =========================================================
+# 2) Keep only patients with both pre and post values
+# =========================================================
+
 zbi_pairs_ids <- zbi_long %>%
-  count(patient) %>%
-  filter(n >= 2) %>%
-  pull(patient)
+  dplyr::count(patient) %>%
+  dplyr::filter(n >= 2) %>%
+  dplyr::pull(patient)
 
 zbi_long_pairs <- zbi_long %>%
-  filter(patient %in% zbi_pairs_ids)
+  dplyr::filter(patient %in% zbi_pairs_ids)
 
-# 3) Wide form / compute change
+
+# =========================================================
+# 3) Convert to wide format and compute change scores
+# =========================================================
+
 zbi_changes <- zbi_long_pairs %>%
-  select(patient, group, time, score) %>%
-  pivot_wider(names_from = time, values_from = score) %>%
-  mutate(change = post - pre) %>%
-  arrange(desc(abs(change)))
+  dplyr::select(patient, group, time, score) %>%
+  tidyr::pivot_wider(names_from = time, values_from = score) %>%
+  dplyr::mutate(change = post - pre) %>%
+  dplyr::arrange(dplyr::desc(abs(change)))
 
-# 4) Export top 10 changes (with review note column)
+
+# =========================================================
+# 4) Export cases for clinical review
+# =========================================================
+
 zbi_review <- zbi_changes %>%
-  mutate(review_note = NA_character_) %>%
-  select(patient, group, pre, post, change, review_note)
+  dplyr::mutate(review_note = NA_character_) %>%
+  dplyr::select(patient, group, pre, post, change, review_note)
 
-if (!dir.exists("Output")) dir.create("Output")
-write_csv(zbi_review, "Output/zbi_top_changes_for_clinical_review.csv")
+if (!dir.exists("Output")) {
+  dir.create("Output")
+}
 
-cat("\n✅ File 'zbi_top_changes_for_clinical_review.csv' saved – please review clinically.\n")
+readr::write_csv(zbi_review, "Output/zbi_top_changes_for_clinical_review.csv")
 
-# 5) ANOVA with and without the top 2 changes
+cat("\nFile 'zbi_top_changes_for_clinical_review.csv' saved — please review clinically.\n")
+
+
+# =========================================================
+# 5) Run ANOVA with and without the two largest changes
+# =========================================================
+
 if (nrow(zbi_long_pairs) >= 3) {
   fit_all <- afex::aov_car(
-    score ~ group * time + Error(patient/time),
+    score ~ group * time + Error(patient / time),
     data = zbi_long_pairs,
     factorize = FALSE
   )
+
   nice_all <- afex::nice(fit_all, es = "pes")
 
-  # Top-2 outliers (can be adjusted after clinical review)
+  # Top-2 potential outliers
+  # Adjust after clinical review if needed
   outlier_ids <- head(zbi_changes$patient, 2)
+
   zbi_no_outliers <- zbi_long_pairs %>%
-    filter(!patient %in% outlier_ids)
+    dplyr::filter(!patient %in% outlier_ids)
 
   fit_no <- afex::aov_car(
-    score ~ group * time + Error(patient/time),
+    score ~ group * time + Error(patient / time),
     data = zbi_no_outliers,
     factorize = FALSE
   )
+
   nice_no <- afex::nice(fit_no, es = "pes")
 
-  # 6) Save short report with/without outliers
+
+  # =========================================================
+  # 6) Save brief report with and without outliers
+  # =========================================================
+
   report <- tibble::tibble(
-    model = c("mit Ausreißern", "ohne Ausreißer"),
+    model = c("with outliers", "without outliers"),
     p_value_group_time = c(
       nice_all$p.value[nice_all$Effect == "group:time"],
       nice_no$p.value[nice_no$Effect == "group:time"]
@@ -75,9 +122,10 @@ if (nrow(zbi_long_pairs) >= 3) {
     )
   )
 
-  write_csv(report, "Output/anova_sensitivity_summary_brief.csv")
-  cat("\n✅ Sensitivity comparison saved to 'anova_sensitivity_summary_brief.csv'\n")
+  readr::write_csv(report, "Output/anova_sensitivity_summary_brief.csv")
+
+  cat("\nSensitivity summary saved to 'anova_sensitivity_summary_brief.csv'\n")
 
 } else {
-  cat("\n⚠️ Not enough complete pre/post pairs for sensitivity ANOVA.\n")
+  cat("\nNot enough complete pre/post pairs for sensitivity ANOVA.\n")
 }
