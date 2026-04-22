@@ -151,6 +151,9 @@ All analyses, study design decisions, variable definitions, and statistical reas
 
 Clinical research project on caregiver burden in Parkinson’s disease.
 
+**Doctoral student:** Liz Wappler
+Philipps-University Marburg / UKGM
+
 **Supervisor:** David Pedrosa  
 Department of Neurology  
 Philipps-University Marburg / UKGM
